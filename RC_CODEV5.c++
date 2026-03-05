@@ -24,13 +24,12 @@ String password;
 
 // -------------------------------------------------------
 // SPEED SETTINGS
-// I-tune ito kung masyadong mabilis o mabagal
 // -------------------------------------------------------
-#define BASE_SPEED      200  // Normal straight speed
-#define TURN_SPEED      220  // Outer wheel speed during correction
-#define INNER_SPEED     60   // Inner wheel speed during correction
-#define HARD_TURN_SPEED 230  // Hard turn outer wheel
-#define HARD_INNER      0    // Hard turn inner wheel (full pivot)
+#define BASE_SPEED      200
+#define TURN_SPEED      220
+#define INNER_SPEED     60
+#define HARD_TURN_SPEED 230
+#define HARD_INNER      0
 
 // -------------------------------------------------------
 // IR SENSOR PINS (TCRT5000)
@@ -45,9 +44,9 @@ String password;
 // MODE & LOST LINE HANDLING
 // -------------------------------------------------------
 bool lineTrackingMode = false;
-int  lastError        = 0;   // -1 = was turning left, 1 = was turning right
-unsigned long lostTime = 0;  // When did we lose the line
-#define LOST_TIMEOUT 1500    // ms before giving up (stop motor)
+int  lastError        = 0;
+unsigned long lostTime = 0;
+#define LOST_TIMEOUT 1500
 
 // -------------------------------------------------------
 // MOTOR HELPERS
@@ -87,30 +86,25 @@ void stopMotors() {
   setRightMotor(0, 0);
 }
 
+// *** FIXED: Added missing moveForward() and moveBackward() ***
+void moveForward() {
+  setLeftMotor(1, BASE_SPEED);
+  setRightMotor(1, BASE_SPEED);
+}
+
+void moveBackward() {
+  setLeftMotor(-1, BASE_SPEED);
+  setRightMotor(-1, BASE_SPEED);
+}
+
 // -------------------------------------------------------
 // LINE TRACKING LOGIC
-//
-// Weighted position system:
-//   Sensor value:  LEFT  CENTER  RIGHT
-//   On line (LOW):   -1     0      1
-//
-// Position = weighted average ng lahat ng sensors
-//
-// Position | Meaning          | Action
-// ---------+------------------+----------------------
-//    0      | Perfect center   | Full speed forward
-//   -1      | Slightly left    | Soft right correction
-//    1      | Slightly right   | Soft left correction
-//   -2      | Far left         | Hard right pivot
-//    2      | Far right        | Hard left pivot
-//  none     | Lost line        | Search based on lastError
 // -------------------------------------------------------
 void lineTrack() {
-  int L = digitalRead(IR_LEFT);    // LOW = on line
+  int L = digitalRead(IR_LEFT);
   int C = digitalRead(IR_CENTER);
   int R = digitalRead(IR_RIGHT);
 
-  // Convert: LOW (line) = 1, HIGH (white) = 0
   int sL = (L == LOW) ? 1 : 0;
   int sC = (C == LOW) ? 1 : 0;
   int sR = (R == LOW) ? 1 : 0;
@@ -127,7 +121,7 @@ void lineTrack() {
 
   // --- LOST LINE: no sensor on black ---
   if (total == 0) {
-    if (lostTime == 0) lostTime = millis(); // Start lost timer
+    if (lostTime == 0) lostTime = millis();
 
     if (millis() - lostTime > LOST_TIMEOUT) {
       stopMotors();
@@ -136,13 +130,10 @@ void lineTrack() {
       return;
     }
 
-    // Search: pivot toward last known direction
     if (lastError >= 0) {
-      // Last seen line on right = pivot right
       setLeftMotor(1, HARD_TURN_SPEED);
       setRightMotor(1, HARD_INNER);
     } else {
-      // Last seen line on left = pivot left
       setLeftMotor(1, HARD_INNER);
       setRightMotor(1, HARD_TURN_SPEED);
     }
@@ -153,36 +144,28 @@ void lineTrack() {
   lostTime = 0;
 
   // --- COMPUTE WEIGHTED POSITION ---
-  // Position: -1 = left, 0 = center, 1 = right
-  // Weighted average: (sL*-1 + sC*0 + sR*1) / total
   float position = ((float)(sL * -1) + (float)(sC * 0) + (float)(sR * 1)) / total;
 
-  // Save last error for lost-line recovery
   lastError = (position > 0) ? 1 : (position < 0) ? -1 : 0;
 
   // --- APPLY CORRECTION ---
   if (position == 0) {
-    // Perfect center
     setLeftMotor(1, BASE_SPEED);
     setRightMotor(1, BASE_SPEED);
   }
   else if (position < 0 && position > -1) {
-    // Slightly left of center = soft right correction
     setLeftMotor(1, TURN_SPEED);
     setRightMotor(1, INNER_SPEED);
   }
   else if (position > 0 && position < 1) {
-    // Slightly right of center = soft left correction
     setLeftMotor(1, INNER_SPEED);
     setRightMotor(1, TURN_SPEED);
   }
   else if (position <= -1) {
-    // Far left = hard right pivot
     setLeftMotor(1, HARD_TURN_SPEED);
     setRightMotor(1, HARD_INNER);
   }
   else if (position >= 1) {
-    // Far right = hard left pivot
     setLeftMotor(1, HARD_INNER);
     setRightMotor(1, HARD_TURN_SPEED);
   }
@@ -306,8 +289,7 @@ void recvMsg(uint8_t *data, size_t len) {
   else if (message == "test all") {
     lineTrackingMode = false;
     WebSerial.println("[TEST] Both motors, 2 sec...");
-    setLeftMotor(1, BASE_SPEED);
-    setRightMotor(1, BASE_SPEED);
+    moveForward();
     delay(2000);
     stopMotors();
     WebSerial.println("[TEST] Done.");
@@ -375,12 +357,12 @@ void setup() {
 }
 
 // -------------------------------------------------------
-// LOOP — walang delay, maximum response speed
+// LOOP
 // -------------------------------------------------------
 void loop() {
   dnsServer.processNextRequest();
 
   if (lineTrackingMode) {
-    lineTrack(); // No delay — runs as fast as possible
+    lineTrack();
   }
 }
