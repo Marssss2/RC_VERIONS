@@ -184,7 +184,7 @@ void moveForward()  { setLeftMotor(1,BASE_SPEED); setRightMotor(1,BASE_SPEED); }
 void moveBackward() { setLeftMotor(-1,BASE_SPEED); setRightMotor(-1,BASE_SPEED); }
 
 // -------------------------------------------------------
-// PID LINE TRACKING — FIXED: end of line check BEFORE checkLap
+// PID LINE TRACKING
 // -------------------------------------------------------
 void lineTrack() {
   int sL = readLeft();
@@ -192,7 +192,7 @@ void lineTrack() {
   int sR = readRight();
   int total = sL + sC + sR;
 
-  // FIXED: End of line check FIRST before checkLap
+  // End of line check FIRST
   if (sL==1 && sC==1 && sR==1) {
     delay(200);
     if (readLeft()==1 && readCenter()==1 && readRight()==1) {
@@ -419,7 +419,14 @@ void recvMsg(uint8_t *data, size_t len) {
   for (int i = 0; i < len; i++) { message += char(data[i]); }
   message.trim(); message.toLowerCase();
 
-  if (message == "track on") {
+  // FIXED: control command — nagpapakita ng clickable link
+  if (message == "control") {
+    WebSerial.println("[GAMEPAD] Opening RC Controller...");
+    WebSerial.println("  >> http://192.168.4.1/control <<");
+    WebSerial.println("  (I-click o i-open sa browser)");
+    return;
+  }
+  else if (message == "track on") {
     lostTime=0; lastError=0; integral=0; lastPID=0;
     lapTimerActive=false; lapCount=0; wasOnStart=false;
     lineTrackingMode=true;
@@ -441,7 +448,7 @@ void recvMsg(uint8_t *data, size_t len) {
   }
   else if (message == "lap reset") {
     lapTimerActive=false; lapCount=0; wasOnStart=false;
-    memset(lapTimes, 0, sizeof(lapTimes)); // FIXED: clear lapTimes array
+    memset(lapTimes, 0, sizeof(lapTimes));
     WebSerial.println("[LAP] Timer reset.");
   }
   else if (message == "sensor test") {
@@ -549,7 +556,7 @@ void recvMsg(uint8_t *data, size_t len) {
     WebSerial.println("    calibrate | laps | lap reset");
     WebSerial.println("    set speed <0-255> | set threshold <0-4095>");
     WebSerial.println("    set kp <val> | set kd <val> | pid");
-    WebSerial.println("    test left/right/all");
+    WebSerial.println("    test left/right/all | control");
   }
 }
 
@@ -577,15 +584,16 @@ void setup() {
 
   startAP();
 
+  // FIXED: root → webserial, hindi na gamepad agad
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->send_P(200, "text/html", GAMEPAD_HTML);
+    request->redirect("/webserial");
   });
   server.on("/control", HTTP_GET, [](AsyncWebServerRequest *request) {
     request->send_P(200, "text/html", GAMEPAD_HTML);
   });
   server.on("/cmd", HTTP_GET, handleCmd);
   server.onNotFound([](AsyncWebServerRequest *request) {
-    request->redirect("/");
+    request->redirect("/webserial");
   });
 
   WebSerial.begin(&server);
@@ -593,8 +601,8 @@ void setup() {
   server.begin();
 
   Serial.println("Ready!");
-  Serial.println("Gamepad:   http://192.168.4.1/");
   Serial.println("WebSerial: http://192.168.4.1/webserial");
+  Serial.println("Gamepad:   http://192.168.4.1/control");
 }
 
 // -------------------------------------------------------
